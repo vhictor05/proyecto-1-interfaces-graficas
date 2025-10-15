@@ -76,6 +76,51 @@ def calcular_area_y_centroide_desde_path(path_img: str, thresh=128, invertir=Fal
         "salida_centroide": str(out_cent),
         "salida_binaria": str(out_bin) if out_bin else None
     }
+def centroide_por_definicion(B: np.ndarray):
+    """Centroide (2.14): promedio de coordenadas de los píxeles figura."""
+    ys, xs = np.where(B.astype(bool))
+    if xs.size == 0:
+        return None
+    return (xs.mean(), ys.mean())
+
+def calcular_area_y_centroide_desde_path(path_img: str, thresh=128, invertir=False,
+                                         guardar_bin=False):
+    p = Path(path_img)
+    img = Image.open(p)
+    B = binarizar(img, thresh=thresh, invertir=invertir)
+    area = area_pixeles(B)
+
+    c_mom = centroide_por_momentos(B)
+    if c_mom is None:
+        raise ValueError("Figura vacía (m00=0). Ajusta --thresh o usa --invert.")
+    xc_m, yc_m = c_mom
+
+    c_def = centroide_por_definicion(B)
+    if c_def is None:
+        raise ValueError("Figura vacía tras definición. Revisa binarización.")
+    xc_d, yc_d = c_def
+
+    # Chequeo numérico (deberían coincidir)
+    diff = float(np.hypot(xc_m - xc_d, yc_m - yc_d))
+
+    marcado = marcar_centroide(img, xc_m, yc_m)  # marcamos el de momentos
+    out_cent = p.with_name(p.stem + "_centroide.png")
+    marcado.save(out_cent)
+
+    out_bin = None
+    if guardar_bin:
+        from PIL import Image as PILImage
+        out_bin = p.with_name(p.stem + "_bin.png")
+        PILImage.fromarray((B * 255).astype(np.uint8)).save(out_bin)
+
+    return {
+        "area_px": area,
+        "centroide_momentos": (xc_m, yc_m),
+        "centroide_definicion": (xc_d, yc_d),
+        "distancia_entre_metodos": diff,
+        "salida_centroide": str(out_cent),
+        "salida_binaria": str(out_bin) if out_bin else None
+    }
 
 def main():
     parser = argparse.ArgumentParser(
@@ -97,11 +142,18 @@ def main():
 
     print(f"Umbral: {args.thresh} | Invertido: {bool(args.invert)}")
     print(f"Área (px): {res['area_px']}")
-    xc, yc = res["centroide"]
-    print(f"Centroide (x,y): ({xc:.6f}, {yc:.6f})")
+
+    xm, ym = res["centroide_momentos"]
+    xd, yd = res["centroide_definicion"]
+
+    print(f"Centroide por momentos (x,y): ({xm:.6f}, {ym:.6f})")
+    print(f"Centroide por definición (x,y): ({xd:.6f}, {yd:.6f})")
+    print(f"Diferencia entre métodos (px): {res['distancia_entre_metodos']:.6e}")
+
     print(f"Marcado guardado en: {res['salida_centroide']}")
     if res["salida_binaria"]:
         print(f"Binaria guardada en: {res['salida_binaria']}")
+
 
 if __name__ == "__main__":
     main()
