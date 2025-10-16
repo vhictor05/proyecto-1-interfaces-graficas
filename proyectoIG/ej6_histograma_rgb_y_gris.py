@@ -27,11 +27,15 @@ def modo_mas_repetido(arr: np.ndarray):
     return val, int(counts[val])
 
 def guardar_histograma(counts: np.ndarray, titulo: str, out_path: Path):
+    if counts.shape[0] != 256:
+        print(f"[ERROR] Histograma inesperado ({counts.shape[0]} bins). Se esperaban 256.")
+        return
+    xs = np.arange(256)
     plt.figure()
     plt.title(titulo)
     plt.xlabel("Intensidad")
     plt.ylabel("Frecuencia")
-    plt.plot(counts)
+    plt.bar(xs, counts, width=1.0)
     plt.xlim(0, 255)
     plt.tight_layout()
     plt.savefig(out_path, dpi=150)
@@ -68,7 +72,8 @@ def main():
     tR, fR = modo_mas_repetido(R)
     tG, fG = modo_mas_repetido(G)
     tB, fB = modo_mas_repetido(B)
-    print(f"Más repetido - R:{tR}({fR})  G:{tG}({fG})  B:{tB}({fB})")
+    tGr, fGr = modo_mas_repetido(GR)
+    print(f"Más repetido - R:{tR}({fR})  G:{tG}({fG})  B:{tB}({fB})  Gris:{tGr}({fGr})")
 
     # Guardar figuras
     out_R  = p.with_name(p.stem + "_hist_R.png")
@@ -86,7 +91,7 @@ def main():
     print(f"  G:    {out_G}")
     print(f"  B:    {out_B}")
     print(f"  Gris: {out_GR}")
-    print("Conclusión típica: el histograma en gris condensa la distribución global; "
+    print("Conclusión: el histograma en gris condensa la distribución global; "
           "picos estrechos → baja variabilidad; distribución amplia → mayor contraste.")
 
 if __name__ == "__main__":

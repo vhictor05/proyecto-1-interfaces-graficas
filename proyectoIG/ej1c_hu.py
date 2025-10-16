@@ -5,10 +5,19 @@ import numpy as np
 import sys
 from pathlib import Path
 from math import isfinite
+import argparse
+from math import log10, copysign
 
-def binarizar(img, thresh=128):
+def hu_log(v):
+    # phi = -sign(v)*log10(|v|), protegido para v=0
+    if v == 0.0:
+        return 0.0
+    return -copysign(log10(abs(v)), v)
+
+def binarizar(img, thresh=128, invertir=False):
     a = np.array(img.convert("L"))
-    return (a >= thresh).astype(np.uint8)  # 1=figura, 0=fondo
+    B = (a >= thresh).astype(np.uint8)  # 1=figura
+    return (1 - B) if invertir else B
 
 def raw_moment(B, p, q):
     yy, xx = np.indices(B.shape, dtype=np.float64)
@@ -71,40 +80,62 @@ def pedir_archivo_si_falta():
         return None
 
 def main():
-    # Obtener ruta
-    if len(sys.argv) >= 2:
-        in_path = sys.argv[1]
-    else:
-        in_path = pedir_archivo_si_falta()
-        if not in_path:
-            print("Uso: python ej1c_hu.py <ruta_de_imagen>")
-            sys.exit(1)
+    parser = argparse.ArgumentParser(description="Ej1(c): Momentos de Hu H1-H3.")
+    parser.add_argument("imagen", nargs="?", help="Ruta de la Figura 1.c")
+    parser.add_argument("--thresh", type=int, default=128, help="Umbral 0..255 (def:128)")
+    parser.add_argument("--invert", action="store_true", help="Invierte la máscara (1=figura)")
+    parser.add_argument("--show-checks", action="store_true",
+                        help="Imprime μ00, μ10≈0, μ01≈0 para sanidad")
+    parser.add_argument("--show-log", action="store_true",
+                        help="Imprime Hu en escala log (phi)")
+    args = parser.parse_args()
+
+    in_path = args.imagen or pedir_archivo_si_falta()
+    if not in_path:
+        print("Uso: python ej1c_hu.py <ruta_de_imagen> [--thresh 128] [--invert]")
+        sys.exit(1)
 
     p = Path(in_path)
     if not p.exists():
         print(f"Archivo no encontrado: {p}")
         sys.exit(1)
 
-    # Binarizar y validar figura
     img = Image.open(p)
-    B = binarizar(img)
+    B = binarizar(img, thresh=args.thresh, invertir=args.invert)
+
     c, m00 = centroid(B)
     if c is None:
-        print("Figura vacía (m00=0). Revisa el umbral o la imagen.")
+        print("Figura vacía (m00=0). Revisa el umbral o usa --invert.")
         sys.exit(1)
+    xc, yc = c
 
-    # Hu
     H1, H2, H3 = hu_moments(B)
     vals = [H1, H2, H3]
     safe = [v if isfinite(v) else 0.0 for v in vals]
 
     print("=== Momentos de Hu (Figura 1.c) ===")
+    print(f"Umbral: {args.thresh} | Invertido: {bool(args.invert)}")
     print(f"m00 (área): {m00:.0f}")
-    xc, yc = c
     print(f"Centroide:   (xc, yc) = ({xc:.6f}, {yc:.6f})")
     print(f"H1 = {safe[0]:.6e}")
     print(f"H2 = {safe[1]:.6e}")
     print(f"H3 = {safe[2]:.6e}")
+
+    if args.show_log:
+        print("--- Hu log (phi) ---")
+        print(f"phi1 = {hu_log(safe[0]):.6e}")
+        print(f"phi2 = {hu_log(safe[1]):.6e}")
+        print(f"phi3 = {hu_log(safe[2]):.6e}")
+
+    if args.show_checks:
+        # sanidad: mu00=m00, mu10≈0, mu01≈0
+        mu00 = central_moment(B, 0, 0, xc, yc)
+        mu10 = central_moment(B, 1, 0, xc, yc)
+        mu01 = central_moment(B, 0, 1, xc, yc)
+        print("--- Checks ---")
+        print(f"mu00 (=m00): {mu00:.0f}")
+        print(f"mu10 ≈ 0:    {mu10:.6e}")
+        print(f"mu01 ≈ 0:    {mu01:.6e}")
 
 if __name__ == "__main__":
     main()

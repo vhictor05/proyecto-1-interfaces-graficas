@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 
 def pedir_archivo_si_falta():
-    # Intenta abrir un diálogo si no hay argumento
     try:
         import tkinter as tk
         from tkinter import filedialog
@@ -21,7 +20,6 @@ def pedir_archivo_si_falta():
         return None
 
 def main():
-    # Obtener ruta
     if len(sys.argv) >= 2:
         in_path = sys.argv[1]
     else:
@@ -35,24 +33,22 @@ def main():
         print(f"Archivo no encontrado: {p}")
         sys.exit(1)
 
-    # Cargar y separar
     img = Image.open(p).convert("RGB")
     r, g, b = img.split()
     gray = img.convert("L")
 
-    # Guardar planos
     out_r = p.with_name(p.stem + "_R.png")
     out_g = p.with_name(p.stem + "_G.png")
     out_b = p.with_name(p.stem + "_B.png")
     out_gray = p.with_name(p.stem + "_GRAY.png")
     r.save(out_r); g.save(out_g); b.save(out_b); gray.save(out_gray)
 
-    # Graficar con MatPlotLib
+    # Graficar planos
     fig, axs = plt.subplots(1, 4, figsize=(10, 3))
-    axs[0].imshow(np.array(r), cmap="gray");    axs[0].set_title("R")
-    axs[1].imshow(np.array(g), cmap="gray");    axs[1].set_title("G")
-    axs[2].imshow(np.array(b), cmap="gray");    axs[2].set_title("B")
-    axs[3].imshow(np.array(gray), cmap="gray"); axs[3].set_title("Gris")
+    axs[0].imshow(np.array(r), cmap="Reds");   axs[0].set_title("R")
+    axs[1].imshow(np.array(g), cmap="Greens"); axs[1].set_title("G")
+    axs[2].imshow(np.array(b), cmap="Blues");  axs[2].set_title("B")
+    axs[3].imshow(np.array(gray), cmap="gray");axs[3].set_title("Gris")
     for ax in axs: ax.axis("off")
     plt.tight_layout()
 
@@ -66,6 +62,7 @@ def main():
     print(f"  B:    {out_b}")
     print(f"  GRAY: {out_gray}")
     print(f"Figura comparativa: {out_fig}")
+    print("Todo OK ✔️")
 
 if __name__ == "__main__":
     main()

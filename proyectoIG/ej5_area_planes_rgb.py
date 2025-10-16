@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 
 def pedir_archivo_si_falta():
-    # Intenta abrir un diálogo si no hay argumento
     try:
         import tkinter as tk
         from tkinter import filedialog
@@ -23,7 +22,6 @@ def main():
     # Obtener ruta y umbral
     if len(sys.argv) >= 2:
         in_path = sys.argv[1]
-        # umbral opcional
         if len(sys.argv) >= 3:
             try:
                 thresh = int(sys.argv[2])
@@ -37,29 +35,28 @@ def main():
         if not in_path:
             print("Uso: python ej5_area_planes_rgb.py <ruta_de_imagen> [umbral]")
             sys.exit(1)
-        thresh = 128  # por defecto si se elige por diálogo
+        thresh = 128
 
     p = Path(in_path)
     if not p.exists():
         print(f"Archivo no encontrado: {p}")
         sys.exit(1)
 
-    # Cargar imagen y separar canales
     img = Image.open(p).convert("RGB")
     r, g, b = img.split()
     R = np.array(r); G = np.array(g); B = np.array(b)
 
-    # Cálculo de áreas (píxeles >= umbral) por canal
+    # Áreas por canal (>= umbral)
     area_R = int((R >= thresh).sum())
     area_G = int((G >= thresh).sum())
     area_B = int((B >= thresh).sum())
     total  = R.size
 
-    # Salida
     print(f"Imagen: {p.name}  |  Dimensión: {img.width}x{img.height}  |  Umbral: {thresh}")
     print(f"Área R (px): {area_R}  ({area_R/total:.2%})")
     print(f"Área G (px): {area_G}  ({area_G/total:.2%})")
     print(f"Área B (px): {area_B}  ({area_B/total:.2%})")
+    print("Todo OK ✔️")
 
 if __name__ == "__main__":
     main()

@@ -1,11 +1,13 @@
 # ej7_aplicar_color.py
-# Uso: python ej7_aplicar_color.py ruta/figura.png  (genera versiones con tintes)
+# Uso: python ej7_aplicar_color.py ruta/figura.png
+# Genera versiones de la imagen con distintos tintes de color.
+
 from PIL import Image, ImageOps
 import sys
 from pathlib import Path
 
 def pedir_archivo_si_falta():
-    # Intenta abrir un diálogo si no hay argumento
+    """Abre un diálogo si no se pasa la ruta por argumento."""
     try:
         import tkinter as tk
         from tkinter import filedialog
@@ -20,13 +22,15 @@ def pedir_archivo_si_falta():
 
 def aplicar_tinte(img, color):
     """
-    color en (R,G,B) 0..255; aplica tinte multiplicativo sobre la versión en gris.
+    color = (R,G,B) 0–255.
+    Aplica un tinte multiplicativo sobre la versión en gris usando tablas LUT.
     """
     g = ImageOps.grayscale(img).convert("RGB")
     r, gc, b = g.split()
-    R = r.point(lambda v: int(v * color[0] / 255.0))
-    G = gc.point(lambda v: int(v * color[1] / 255.0))
-    B = b.point(lambda v: int(v * color[2] / 255.0))
+    lutR = [int(v * color[0] / 255) for v in range(256)]
+    lutG = [int(v * color[1] / 255) for v in range(256)]
+    lutB = [int(v * color[2] / 255) for v in range(256)]
+    R = r.point(lutR); G = gc.point(lutG); B = b.point(lutB)
     return Image.merge("RGB", (R, G, B))
 
 def main():
@@ -44,7 +48,9 @@ def main():
         print(f"Archivo no encontrado: {p}")
         sys.exit(1)
 
-    img = Image.open(p).convert("RGB")
+    img = Image.open(p)
+    base = img.convert("RGB")
+    alpha = img.getchannel("A") if img.mode == "RGBA" else None
 
     colores = {
         "rojo":     (255, 80,  80),
@@ -57,7 +63,10 @@ def main():
 
     generados = []
     for nombre, c in colores.items():
-        out_img = aplicar_tinte(img, c)
+        out_img = aplicar_tinte(base, c)
+        if alpha is not None:
+            out_img = out_img.convert("RGBA")
+            out_img.putalpha(alpha)
         out_path = p.with_name(p.stem + f"_tinte_{nombre}.png")
         out_img.save(out_path)
         generados.append(out_path)
@@ -65,6 +74,7 @@ def main():
     print("Tintes aplicados y guardados:")
     for g in generados:
         print(f"  {g}")
+    print("Todo OK ✔️")
 
 if __name__ == "__main__":
     main()

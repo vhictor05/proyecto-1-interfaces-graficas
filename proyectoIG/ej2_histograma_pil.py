@@ -36,14 +36,17 @@ def main():
 
     # Cargar en gris y obtener histograma (PIL)
     img = Image.open(p).convert("L")
-    hist = img.histogram()  # 256 bins
+    hist = img.histogram()  # debería tener 256 bins
+    if len(hist) != 256:
+        print(f"Histograma inesperado: {len(hist)} bins (se esperaban 256)")
+        sys.exit(1)
 
-    # Graficar y guardar
+    # Graficar y guardar (barra = histograma real)
     plt.figure()
     plt.title("Histograma (escala de grises)")
     plt.xlabel("Intensidad")
     plt.ylabel("Frecuencia")
-    plt.plot(hist)
+    plt.bar(range(256), hist, width=1.0)
     plt.xlim(0, 255)
     plt.tight_layout()
 
