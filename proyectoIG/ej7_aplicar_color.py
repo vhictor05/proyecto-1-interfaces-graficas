@@ -1,80 +1,85 @@
 # ej7_aplicar_color.py
-# Uso: python ej7_aplicar_color.py ruta/figura.png
-# Genera versiones de la imagen con distintos tintes de color.
+# Uso:
+#   python ej7_aplicar_color.py ruta/figura.png [--show]
+# Opcional (ajustes del azul):
+#   --dark  r g b    # color para las sombras (por defecto 0 20 90)
+#   --light r g b    # color para las luces  (por defecto 140 190 255)
 
 from PIL import Image, ImageOps
-import sys
+import numpy as np
+import matplotlib.pyplot as plt
 from pathlib import Path
+import argparse, sys
 
 def pedir_archivo_si_falta():
-    """Abre un diálogo si no se pasa la ruta por argumento."""
     try:
         import tkinter as tk
         from tkinter import filedialog
         root = tk.Tk(); root.withdraw()
-        path = filedialog.askopenfilename(
-            title="Selecciona la figura (para aplicar tintes)",
+        return filedialog.askopenfilename(
+            title="Selecciona la figura (gris + coloreado azul)",
             filetypes=[("Imágenes", "*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff"), ("Todos", "*.*")]
-        )
-        return path or None
+        ) or None
     except Exception:
         return None
 
-def aplicar_tinte(img, color):
+def colorizar_azul(img_gray: Image.Image, dark=(0,20,90), light=(140,190,255)) -> Image.Image:
     """
-    color = (R,G,B) 0–255.
-    Aplica un tinte multiplicativo sobre la versión en gris usando tablas LUT.
+    Mapea el gris a azul usando ImageOps.colorize:
+    - 'dark' = color para valores oscuros (0)
+    - 'light' = color para valores claros (255)
     """
-    g = ImageOps.grayscale(img).convert("RGB")
-    r, gc, b = g.split()
-    lutR = [int(v * color[0] / 255) for v in range(256)]
-    lutG = [int(v * color[1] / 255) for v in range(256)]
-    lutB = [int(v * color[2] / 255) for v in range(256)]
-    R = r.point(lutR); G = gc.point(lutG); B = b.point(lutB)
-    return Image.merge("RGB", (R, G, B))
+    return ImageOps.colorize(img_gray, black=tuple(dark), white=tuple(light))
 
 def main():
-    # Obtener ruta
-    if len(sys.argv) >= 2:
-        in_path = sys.argv[1]
-    else:
-        in_path = pedir_archivo_si_falta()
-        if not in_path:
-            print("Uso: python ej7_aplicar_color.py <ruta_de_imagen>")
-            sys.exit(1)
+    ap = argparse.ArgumentParser(description="Ej7: convertir a gris y colorear en azul (como la guía).")
+    ap.add_argument("imagen", nargs="?", help="Ruta de la imagen de entrada")
+    ap.add_argument("--show", action="store_true", help="Mostrar figura comparativa en pantalla")
+    ap.add_argument("--dark",  nargs=3, type=int, metavar=("R","G","B"), default=(0,20,90),
+                    help="Color para sombras (0..255 0..255 0..255)")
+    ap.add_argument("--light", nargs=3, type=int, metavar=("R","G","B"), default=(140,190,255),
+                    help="Color para luces (0..255 0..255 0..255)")
+    args = ap.parse_args()
+
+    in_path = args.imagen or pedir_archivo_si_falta()
+    if not in_path:
+        print("Uso: python ej7_aplicar_color.py <ruta_de_imagen> [--show] [--dark r g b] [--light r g b]")
+        sys.exit(1)
 
     p = Path(in_path)
     if not p.exists():
         print(f"Archivo no encontrado: {p}")
         sys.exit(1)
 
-    img = Image.open(p)
-    base = img.convert("RGB")
-    alpha = img.getchannel("A") if img.mode == "RGBA" else None
+    # 1) Abrir y convertir a gris
+    img = Image.open(p).convert("RGB")
+    gray = img.convert("L")  # gris normal (0.299R + 0.587G + 0.114B)
+    out_gray = p.with_name(p.stem + "_GRAY.png")
+    gray.save(out_gray)
 
-    colores = {
-        "rojo":     (255, 80,  80),
-        "verde":    ( 80,255,  80),
-        "azul":     ( 80, 80, 255),
-        "magenta":  (255, 80, 255),
-        "cian":     ( 80,255, 255),
-        "amarillo": (255,255,  80),
-    }
+    # 2) Colorear en azul (como la lámina)
+    colored = colorizar_azul(gray, dark=args.dark, light=args.light)
+    out_col = p.with_name(p.stem + "_color_azul.png")
+    colored.save(out_col)
 
-    generados = []
-    for nombre, c in colores.items():
-        out_img = aplicar_tinte(base, c)
-        if alpha is not None:
-            out_img = out_img.convert("RGBA")
-            out_img.putalpha(alpha)
-        out_path = p.with_name(p.stem + f"_tinte_{nombre}.png")
-        out_img.save(out_path)
-        generados.append(out_path)
+    # 3) Figura comparativa como en el enunciado
+    fig, axs = plt.subplots(1, 2, figsize=(9.5, 3.8))
+    axs[0].imshow(np.array(gray), cmap="gray")
+    axs[0].set_title("[ Figura original en Gris ]")
+    axs[1].imshow(np.array(colored))
+    axs[1].set_title("[ Figura coloreada ]")
+    for ax in axs: ax.axis("off")
+    plt.tight_layout()
+    out_fig = p.with_name(p.stem + "_comparativa.png")
+    plt.savefig(out_fig, dpi=150)
+    if args.show:
+        plt.show()
+    plt.close(fig)
 
-    print("Tintes aplicados y guardados:")
-    for g in generados:
-        print(f"  {g}")
-    print("Todo OK ✔️")
+    print("Listo ✅")
+    print(f"  Gris:        {out_gray}")
+    print(f"  Color azul:  {out_col}")
+    print(f"  Comparativa: {out_fig}")
 
 if __name__ == "__main__":
     main()

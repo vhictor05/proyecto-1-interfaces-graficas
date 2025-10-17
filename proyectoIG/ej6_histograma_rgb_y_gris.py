@@ -1,98 +1,135 @@
 # ej6_histograma_rgb_y_gris.py
-# Uso: python ej6_histograma_rgb_y_gris.py ruta/imagen.png
+# Uso:
+#   python ej6_histograma_rgb_y_gris.py ruta/imagen.png [--smooth 5] [--show]
+#
+# Qué hace:
+#   - Calcula y grafica los histogramas de R, G, B y Gris (curvas superpuestas).
+#   - Indica la tonalidad (modo 0..255) más repetida en R, G, B y Gris.
+#   - Guarda:
+#       1) figura combinada RGB+Gris:  *_hist_rgb_gris.png
+#       2) imagen en escala de grises: *_GRAY.png     <-- NUEVO
+#       3) histograma solo del gris:   *_hist_gray.png <-- EXTRA útil
+
 from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
-import sys
 from pathlib import Path
+import argparse, sys
 
+# -------- utilidades ----------
 def pedir_archivo_si_falta():
-    # Intenta abrir un diálogo si no hay argumento
     try:
         import tkinter as tk
         from tkinter import filedialog
         root = tk.Tk(); root.withdraw()
         path = filedialog.askopenfilename(
-            title="Selecciona la imagen (para histogramas RGB y Gris)",
+            title="Selecciona la imagen (para histogramas RGB y gris)",
             filetypes=[("Imágenes", "*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff"), ("Todos", "*.*")]
         )
         return path or None
     except Exception:
         return None
 
-def modo_mas_repetido(arr: np.ndarray):
-    """Devuelve (valor, frecuencia) del bin más frecuente en 0..255."""
-    counts = np.bincount(arr.flatten(), minlength=256)
-    val = int(counts.argmax())
-    return val, int(counts[val])
+def hist256(arr_uint8: np.ndarray) -> np.ndarray:
+    return np.bincount(arr_uint8.ravel(), minlength=256)
 
-def guardar_histograma(counts: np.ndarray, titulo: str, out_path: Path):
-    if counts.shape[0] != 256:
-        print(f"[ERROR] Histograma inesperado ({counts.shape[0]} bins). Se esperaban 256.")
-        return
-    xs = np.arange(256)
-    plt.figure()
-    plt.title(titulo)
-    plt.xlabel("Intensidad")
-    plt.ylabel("Frecuencia")
-    plt.bar(xs, counts, width=1.0)
-    plt.xlim(0, 255)
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=150)
-    plt.close()
+def suavizar(y: np.ndarray, k: int = 0) -> np.ndarray:
+    """Suaviza el histograma con media móvil (solo visual)."""
+    if k <= 1:
+        return y
+    k = int(k)
+    if k % 2 == 0: k += 1
+    pad = k // 2
+    ypad = np.pad(y, (pad, pad), mode="edge")
+    kernel = np.ones(k) / k
+    return np.convolve(ypad, kernel, mode="valid")
 
+# -------- principal ----------
 def main():
-    # Obtener ruta
-    if len(sys.argv) >= 2:
-        in_path = sys.argv[1]
-    else:
-        in_path = pedir_archivo_si_falta()
-        if not in_path:
-            print("Uso: python ej6_histograma_rgb_y_gris.py <ruta_de_imagen>")
-            sys.exit(1)
+    ap = argparse.ArgumentParser(description="Histograma R/G/B y Gris (modos + guardado de imagen gris).")
+    ap.add_argument("imagen", nargs="?", help="Ruta de la imagen")
+    ap.add_argument("--smooth", type=int, default=3, help="Suavizado visual de curvas (p.ej. 5)")
+    ap.add_argument("--show", action="store_true", help="Muestra la figura")
+    args = ap.parse_args()
 
+    in_path = args.imagen or pedir_archivo_si_falta()
+    if not in_path:
+        print("Uso: python ej6_histograma_rgb_y_gris.py <ruta> [--smooth 5] [--show]")
+        sys.exit(1)
     p = Path(in_path)
     if not p.exists():
         print(f"Archivo no encontrado: {p}")
         sys.exit(1)
 
-    # Cargar imagen y separar canales
+    # ---- Cargar y separar ----
     img = Image.open(p).convert("RGB")
     r, g, b = img.split()
-    R = np.array(r); G = np.array(g); B = np.array(b)
-    GR = np.array(img.convert("L"))
+    gray = img.convert("L")  # (0.299R + 0.587G + 0.114B) — gris normal
 
-    # Histogramas (256 bins)
-    hist_R  = np.bincount(R.flatten(),  minlength=256)
-    hist_G  = np.bincount(G.flatten(),  minlength=256)
-    hist_B  = np.bincount(B.flatten(),  minlength=256)
-    hist_GR = np.bincount(GR.flatten(), minlength=256)
+    R = np.array(r, dtype=np.uint8)
+    G = np.array(g, dtype=np.uint8)
+    B = np.array(b, dtype=np.uint8)
+    GR = np.array(gray, dtype=np.uint8)
 
-    # Tonalidades más repetidas
-    tR, fR = modo_mas_repetido(R)
-    tG, fG = modo_mas_repetido(G)
-    tB, fB = modo_mas_repetido(B)
-    tGr, fGr = modo_mas_repetido(GR)
-    print(f"Más repetido - R:{tR}({fR})  G:{tG}({fG})  B:{tB}({fB})  Gris:{tGr}({fGr})")
+    # ---- Histogramas ----
+    hR, hG, hB, hGR = hist256(R), hist256(G), hist256(B), hist256(GR)
+    hsR, hsG, hsB, hsGR = [suavizar(h, args.smooth) for h in (hR, hG, hB, hGR)]
 
-    # Guardar figuras
-    out_R  = p.with_name(p.stem + "_hist_R.png")
-    out_G  = p.with_name(p.stem + "_hist_G.png")
-    out_B  = p.with_name(p.stem + "_hist_B.png")
-    out_GR = p.with_name(p.stem + "_hist_gray.png")
+    # ---- Modos (tonalidad más frecuente) ----
+    mR, fR = int(np.argmax(hR)), int(hR.max())
+    mG, fG = int(np.argmax(hG)), int(hG.max())
+    mB, fB = int(np.argmax(hB)), int(hB.max())
+    mGR, fGR = int(np.argmax(hGR)), int(hGR.max())
 
-    guardar_histograma(hist_R,  "Histograma R",    out_R)
-    guardar_histograma(hist_G,  "Histograma G",    out_G)
-    guardar_histograma(hist_B,  "Histograma B",    out_B)
-    guardar_histograma(hist_GR, "Histograma Gris", out_GR)
+    # ---- (1) Figura combinada RGB + Gris ----
+    xs = np.arange(256)
+    plt.figure(figsize=(8, 4))
+    plt.plot(xs, hsR, color="red",   label=f"Rojo (modo {mR})")
+    plt.plot(xs, hsG, color="green", label=f"Verde (modo {mG})")
+    plt.plot(xs, hsB, color="blue",  label=f"Azul (modo {mB})")
+    plt.plot(xs, hsGR, color="black", linestyle="--", label=f"Gris (modo {mGR})")
+    plt.title(p.name)
+    plt.xlabel("Valores de píxel (0–255)")
+    plt.ylabel("Frecuencia")
+    plt.grid(alpha=0.25)
+    plt.legend()
+    plt.xlim(0, 255)
+    plt.tight_layout()
+    out_overlay = p.with_name(p.stem + "_hist_rgb_gris.png")
+    plt.savefig(out_overlay, dpi=150)
+    if args.show:
+        plt.show()
+    plt.close()
 
-    print("Histogramas guardados:")
-    print(f"  R:    {out_R}")
-    print(f"  G:    {out_G}")
-    print(f"  B:    {out_B}")
-    print(f"  Gris: {out_GR}")
-    print("Conclusión: el histograma en gris condensa la distribución global; "
-          "picos estrechos → baja variabilidad; distribución amplia → mayor contraste.")
+    # ---- (2) Guardar IMAGEN en GRIS ----
+    out_gray_img = p.with_name(p.stem + "_GRAY.png")
+    gray.save(out_gray_img)
+
+    # ---- (3) (Extra) Histograma solo del GRIS (barras) ----
+    plt.figure(figsize=(6, 3))
+    plt.bar(np.arange(256), hGR, width=1.0, edgecolor="none", color="black")
+    plt.title(f"Histograma (Gris) – modo {mGR}")
+    plt.xlabel("Intensidad (0–255)")
+    plt.ylabel("Frecuencia")
+    plt.xlim(0, 255)
+    plt.tight_layout()
+    out_gray_hist = p.with_name(p.stem + "_hist_gray.png")
+    plt.savefig(out_gray_hist, dpi=150)
+    if args.show:
+        plt.show()
+    plt.close()
+
+    # ---- Consola ----
+    print("=== Tonalidad más repetida (modo) ===")
+    print(f"Rojo (R):  {mR} (freq={fR})")
+    print(f"Verde (G): {mG} (freq={fG})")
+    print(f"Azul (B):  {mB} (freq={fB})")
+    print(f"Gris:      {mGR} (freq={fGR})")
+    print("\nGuardados:")
+    print(f"  Figura RGB+Gris: {out_overlay}")
+    print(f"  Imagen en Gris:  {out_gray_img}")     # <-- NUEVO
+    print(f"  Hist. solo Gris: {out_gray_hist}")    # <-- EXTRA
+    print("OK ✔️")
 
 if __name__ == "__main__":
     main()
